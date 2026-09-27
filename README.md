@@ -4,14 +4,14 @@ This is a small paid API for live Arc mainnet data. It returns the latest block,
 
 The paid endpoint is `GET https://opdevio.xyz/arc/v1/snapshot`. It charges 0.01 USDC on Arc mainnet (chain ID 5042). An unpaid request returns HTTP 402 with x402 v2 payment terms. The endpoint uses the Arcus facilitator to verify and settle EIP-3009 payments. The payer's USDC goes directly to the published payee address; the facilitator pays transaction gas.
 
-Install ethers 6, then run the client with Node.js 20 or newer:
+Install ethers 6, then run the client with Node.js 20 or newer. Configure your secret manager to inject `ARC_PAYER_PRIVATE_KEY` into the process environment. Do not put the key in a shell command or file.
 
 ```sh
 npm install
-TARGET_URL=https://opdevio.xyz/arc/v1/snapshot PK_FILE=/path/to/protected-key-file node pay.mjs
+TARGET_URL=https://opdevio.xyz/arc/v1/snapshot node pay.mjs
 ```
 
-The key file must contain the payer's EVM private key. Keep it outside the repository. The client prints the API response and settlement transaction.
+The client reads the key from its environment and never writes it to a key file or passes it as a command-line argument. It prints the API response and settlement transaction.
 
 A free preview is available at `GET https://opdevio.xyz/arc/v1/snapshot/preview`. It returns the latest block number, but not the paid snapshot.
 

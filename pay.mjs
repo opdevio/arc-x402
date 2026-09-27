@@ -1,11 +1,11 @@
-// Pay an Arc x402 v2 endpoint. The private key stays in PK_FILE, not argv or output.
-import { readFileSync } from "node:fs";
+// Pay an Arc x402 v2 endpoint. The private key is injected from the vault into this process environment.
 import { randomBytes } from "node:crypto";
 import { Wallet, verifyTypedData } from "ethers";
 
 const url = process.env.TARGET_URL;
-const key = readFileSync(process.env.PK_FILE, "utf8").trim();
-const account = new Wallet(key);
+const key = process.env.ARC_PAYER_PRIVATE_KEY;
+if (!url || !key) throw new Error("TARGET_URL and ARC_PAYER_PRIVATE_KEY are required");
+const account = new Wallet(key.trim());
 const r1 = await fetch(url, { redirect: "error" });
 if (r1.status !== 402) {
   console.log(JSON.stringify({ step: "challenge", status: r1.status,
