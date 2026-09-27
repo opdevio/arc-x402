@@ -229,8 +229,11 @@ class Handler(BaseHTTPRequestHandler):
                 return self._need(settle.get("errorReason") or settle.get("error") or "settlement failed")
             receipt_check = receipt_pays_us(tx, int(AMOUNT))
             if receipt_check is False:
+                # The facilitator claimed success, but the receipt does not pay us: no body, no record.
                 print("SETTLEMENT RECEIPT MISMATCH tx=%s" % tx, flush=True)
-            elif receipt_check is None:
+                return self._send(502, {"error": "settlement_receipt_mismatch", "transaction": tx,
+                                        "explorer": EXPLORER + "/tx/" + tx})
+            if receipt_check is None:
                 print("SETTLEMENT RECEIPT UNAVAILABLE tx=%s" % tx, flush=True)
             record(tx, settle.get("payer"))
             out["payment"] = {"transaction": tx, "explorer": EXPLORER + "/tx/" + tx,
