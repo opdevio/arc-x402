@@ -1,4 +1,4 @@
-// Pay an Arc x402 v2 endpoint. The private key is injected from the vault into this process environment.
+// Pay an Arc x402 v2 endpoint. The private key is injected into this process environment.
 import { randomBytes } from "node:crypto";
 import { Wallet, verifyTypedData } from "ethers";
 
