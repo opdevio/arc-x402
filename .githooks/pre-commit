@@ -1,0 +1,17 @@
+#!/usr/bin/env sh
+# Check the effective identities, including environment and --author overrides.
+set -eu
+want='opdev io <hello@opdevio.xyz>'
+for role in AUTHOR COMMITTER; do
+    ident="$(git var "GIT_${role}_IDENT")"
+    case "$ident" in
+        "$want "*) ;;
+        *) echo "pre-commit: effective $role must use the business identity" >&2; exit 1 ;;
+    esac
+done
+[ "$(git config --type=bool commit.gpgsign || echo false)" = false ] || {
+    echo 'pre-commit: commit.gpgsign must be false' >&2; exit 1;
+}
+if git diff --cached --name-only | grep -qE '(^|/)\.env($|\.)'; then
+    echo 'pre-commit: refusing to commit a .env file' >&2; exit 1
+fi

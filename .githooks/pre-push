@@ -1,0 +1,61 @@
+#!/usr/bin/env sh
+# Check every reachable commit before publishing to any product remote.
+set -eu
+# Anything heading for GitHub must go over the business SSH alias, and that
+# alias must really authenticate as the business account.
+#
+# Checking the gh token is not enough: gh can be the business account while the
+# push itself travels over a personal SSH key, because the remote URL decides
+# the transport identity and gh never sees it. The commit checks below would all
+# pass and the push would still arrive as somebody else.
+case "$2" in
+    *github.com*|*github-opdevio*)
+        case "$2" in
+            git@github-opdevio:*) ;;
+            *) echo 'pre-push: push to GitHub must use git@github-opdevio:<owner>/<repo>.git' >&2
+               echo "pre-push: got $2" >&2
+               echo 'pre-push: github.com resolves to the operator personal key' >&2
+               exit 1 ;;
+        esac
+        # -n is load-bearing: git feeds the ref list on stdin, and ssh reads
+        # stdin by default. Without it ssh swallows the refs, the loop below
+        # gets nothing, and every commit identity check silently passes.
+        who="$(ssh -n -o BatchMode=yes -o ConnectTimeout=10 -T git@github-opdevio 2>&1                | sed -n 's/^Hi \([A-Za-z0-9-]*\).*/\1/p')"
+        [ "$who" = opdevio ] || {
+            echo "pre-push: the alias authenticates as '${who:-nobody}', not opdevio" >&2; exit 1;
+        }
+        command -v gh >/dev/null 2>&1 && {
+            login="$(gh api --hostname github.com user --jq .login </dev/null 2>/dev/null || true)"
+            [ -z "$login" ] || [ "$login" = opdevio ] || {
+                echo 'pre-push: switch gh to the dedicated business account' >&2; exit 1;
+            }
+        } ;;
+esac
+want='opdev io <hello@opdevio.xyz>'
+while read -r local_ref local_sha remote_ref remote_sha; do
+    case "$local_sha" in *[!0]*) ;; *) continue ;; esac
+    object="$local_sha"
+    while [ "$(git cat-file -t "$object")" = tag ]; do
+        tag="$(git cat-file tag "$object")"
+        tagger="$(printf '%s\n' "$tag" | sed -n '/^$/q; s/^tagger //p')"
+        case "$tagger" in "$want "*) ;; *) echo 'pre-push: tagger must use the business identity' >&2; exit 1 ;; esac
+        if printf '%s\n' "$tag" | grep -qE '^-----BEGIN .*SIGNATURE-----'; then
+            echo 'pre-push: signed tags are not allowed' >&2; exit 1
+        fi
+        object="$(printf '%s\n' "$tag" | sed -n '1s/^object //p')"
+    done
+    [ "$(git cat-file -t "$object")" = commit ] || {
+        echo 'pre-push: only refs resolving to commits are allowed' >&2; exit 1;
+    }
+    commits="$(git rev-list "$object")"
+    for commit in $commits; do
+        identity="$(git show -s --format='%an <%ae>|%cn <%ce>' "$commit")"
+        [ "$identity" = "$want|$want" ] || {
+            echo 'pre-push: history contains a non-business author or committer' >&2; exit 1;
+        }
+        headers="$(git cat-file commit "$commit" | sed '/^$/q')"
+        if printf '%s\n' "$headers" | grep -qE '^gpgsig(-sha256)? '; then
+            echo 'pre-push: signed commits are not allowed' >&2; exit 1
+        fi
+    done
+done
